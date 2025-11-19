@@ -1,21 +1,39 @@
 {
   "name": "publicmcp",
   "version": "1.0.0",
-  "main": "index.js",
+  "description": "MCP server for checking fire danger and applying for burn permits in Maine",
+  "main": "dist/index.js",
   "type": "module",
+  "bin": {
+    "maine-burn-permit": "dist/index.js"
+  },
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsc --watch",
+    "prepare": "npm run build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "maine",
+    "burn-permit",
+    "fire-danger",
+    "automation"
+  ],
   "author": "",
   "license": "ISC",
-  "description": "",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/publicmcp.git"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.22.0",
     "puppeteer": "^24.30.0",
     "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
   }
 }

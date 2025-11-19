@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh auth:*)",
+      "Bash(gh api:*)",
+      "Bash(git -C /Users/wolfbird/dev/publicmcp remote:*)",
+      "Bash(cat:*)",
+      "Bash(git -C /Users/wolfbird/dev/publicmcp diff package.json src/tools/applyPermit.ts)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
