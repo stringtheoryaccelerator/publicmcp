@@ -22,11 +22,11 @@
     "fire-danger",
     "automation"
   ],
-  "author": "",
+  "author": "stringtheoryaccelerator",
   "license": "ISC",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/publicmcp.git"
+    "url": "https://github.com/stringtheoryaccelerator/publicmcp.git"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.22.0",
