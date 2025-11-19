@@ -166,11 +166,6 @@ export const applyPermitTool = {
                 page.click("input[name='continue']"),
             ]);
 
-            // DEBUG: Dump content of step 4
-            const contentStep4 = await page.content();
-            const fs = await import('fs');
-            fs.writeFileSync('debug_permit_step4.html', contentStep4);
-
             // Step 4: Minimum Requirements
             await page.waitForSelector("#minimumRequirements_agreed", { visible: true });
             await page.click("#minimumRequirements_agreed");
