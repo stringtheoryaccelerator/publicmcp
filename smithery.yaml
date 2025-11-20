@@ -1,5 +1,5 @@
 # Smithery configuration file
-# https://smithery.ai/docs/build/project-config/smithery-yaml
+# https://smithery.ai/docs/deployments
 
 startCommand:
   type: stdio
@@ -8,6 +8,6 @@ startCommand:
     properties: {}
   commandFunction: |-
     (config) => ({
-      command: "npx",
-      args: ["-y", "publicmcp"]
+      command: 'node',
+      args: ['dist/index.js']
     })
