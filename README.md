@@ -1,5 +1,7 @@
 # Maine Burn Permit MCP Server
 
+[![smithery badge](https://smithery.ai/badge/@stringtheoryaccelerator/publicmcp)](https://smithery.ai/server/@stringtheoryaccelerator/publicmcp)
+
 A Model Context Protocol (MCP) server that provides automated tools for checking fire danger levels and applying for burn permits in Maine.
 
 ## Overview
@@ -392,4 +394,3 @@ ISC
 ## Support
 
 For issues or questions, please open an issue on the GitHub repository.
-
