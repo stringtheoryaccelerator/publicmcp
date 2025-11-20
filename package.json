@@ -30,10 +30,12 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.22.0",
+    "express": "^5.1.0",
     "puppeteer": "^24.30.0",
     "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@types/express": "^5.0.5",
     "typescript": "^5.0.0"
   }
 }
