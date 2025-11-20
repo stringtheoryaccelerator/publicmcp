@@ -7,7 +7,19 @@
       "Bash(cat:*)",
       "Bash(git -C /Users/wolfbird/dev/publicmcp diff package.json src/tools/applyPermit.ts)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(gh repo create:*)",
+      "Bash(npm whoami:*)",
+      "Bash(npm view:*)",
+      "Bash(npm login)",
+      "Bash(npm publish:*)",
+      "Bash(git push)",
+      "WebFetch(domain:smithery.ai)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "Bash(chmod:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm install:*)"
     ],
     "deny": [],
     "ask": []
