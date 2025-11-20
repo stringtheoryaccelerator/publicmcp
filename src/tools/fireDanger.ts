@@ -1,25 +1,33 @@
 import { z } from "zod";
 import puppeteer from "puppeteer";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 const FIRE_DANGER_URL = "https://mainefireweather.org/station.php";
 
-export const fireDangerTool = {
-    definition: {
-        name: "check_fire_danger",
-        description: "Checks the current fire danger rating for a specific town in Maine to see if burning is allowed.",
-        inputSchema: {
-            type: "object",
-            properties: {
-                town: {
-                    type: "string",
-                    description: "The name of the town to check fire danger for.",
-                },
+export function registerFireDangerTool(server: McpServer) {
+    server.registerTool(
+        "check_fire_danger",
+        {
+            title: "Check Fire Danger",
+            description: "Checks the current fire danger rating for a specific town in Maine to see if burning is allowed.",
+            inputSchema: {
+                town: z.string().describe("The name of the town to check fire danger for"),
             },
-            required: ["town"],
+            outputSchema: {
+                stationName: z.string(),
+                zoneId: z.string(),
+                burningIndex: z.string(),
+                fireMoisture1hr: z.string(),
+                fireMoisture10hr: z.string(),
+                fireMoisture100hr: z.string(),
+                temperature: z.string(),
+                humidity: z.string(),
+                windSpeed: z.string(),
+                note: z.string(),
+            },
         },
-    },
-    handler: async (args: any) => {
-        const { town } = z.object({ town: z.string() }).parse(args);
+        async (args) => {
+            const { town } = args;
 
         let browser;
         try {
@@ -90,19 +98,33 @@ export const fireDangerTool = {
             const fd = currentStationData.firedanger;
             const weather = currentStationData.weather;
 
+            const output = {
+                stationName: station.station_name,
+                zoneId: station.zoneid.toString(),
+                burningIndex: fd.bi.toString(),
+                fireMoisture1hr: fd.fm1.toString(),
+                fireMoisture10hr: fd.fm10.toString(),
+                fireMoisture100hr: fd.fm100.toString(),
+                temperature: `${weather.dry_temp}°F`,
+                humidity: `${weather.rh}%`,
+                windSpeed: `${weather.wind_sp} mph`,
+                note: `Please verify the official Class Day (Low/Moderate/High) on the main map at ${FIRE_DANGER_URL} before burning.`,
+            };
+
             return {
                 content: [
                     {
                         type: "text",
-                        text: `Fire Weather Data for ${station.station_name} (Zone ${station.zoneid}):\n` +
-                            `Burning Index: ${fd.bi}\n` +
-                            `Fire Moisture (1-hr): ${fd.fm1}\n` +
-                            `Fire Moisture (10-hr): ${fd.fm10}\n` +
-                            `Fire Moisture (100-hr): ${fd.fm100}\n` +
-                            `Weather: ${weather.dry_temp}°F, RH ${weather.rh}%, Wind ${weather.wind_sp} mph\n` +
-                            `\nNote: Please verify the official Class Day (Low/Moderate/High) on the main map at ${FIRE_DANGER_URL} before burning.`,
+                        text: `Fire Weather Data for ${output.stationName} (Zone ${output.zoneId}):\n` +
+                            `Burning Index: ${output.burningIndex}\n` +
+                            `Fire Moisture (1-hr): ${output.fireMoisture1hr}\n` +
+                            `Fire Moisture (10-hr): ${output.fireMoisture10hr}\n` +
+                            `Fire Moisture (100-hr): ${output.fireMoisture100hr}\n` +
+                            `Weather: ${output.temperature}, RH ${output.humidity}, Wind ${output.windSpeed}\n` +
+                            `\nNote: ${output.note}`,
                     },
                 ],
+                structuredContent: output,
             };
 
         } catch (error: any) {
@@ -120,5 +142,5 @@ export const fireDangerTool = {
                 await browser.close();
             }
         }
-    },
-};
+    });
+}

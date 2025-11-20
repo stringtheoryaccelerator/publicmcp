@@ -1,48 +1,35 @@
 import { z } from "zod";
 import puppeteer from "puppeteer";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-const PERMIT_URL = "https://www13.maine.gov/burnpermit/public/index.html"; // Found via search or common knowledge, will verify. 
+const PERMIT_URL = "https://www13.maine.gov/burnpermit/public/index.html";
 
-export const applyPermitTool = {
-    definition: {
-        name: "apply_for_burn_permit",
-        description: "Automates the process of applying for a Maine open burn permit.",
-        inputSchema: {
-            type: "object",
-            properties: {
-                town: { type: "string", description: "Town where burning will occur" },
-                address: { type: "string", description: "Physical address of the burn (and applicant's home address)" },
-                city: { type: "string", description: "City of the applicant's address" },
-                state: { type: "string", description: "State of the applicant's address", default: "ME" },
-                zip: { type: "string", description: "Zip code" },
-                dob: { type: "string", description: "Date of Birth (MM/DD/YYYY)" },
-                material: {
-                    type: "string",
-                    description: "Material to be burned (e.g., 'Brush', 'Wood Debris', 'Agricultural')",
-                    enum: ["Brush", "Wood Debris", "Agricultural", "Campfire"]
-                },
-                applicantName: { type: "string", description: "Full name of the applicant" },
-                phone: { type: "string", description: "Phone number (e.g., 207-555-1234)" },
-                email: { type: "string", description: "Email address" },
-                burnLocation: { type: "string", description: "Description of burn location on property" },
+export function registerApplyPermitTool(server: McpServer) {
+    server.registerTool(
+        "apply_for_burn_permit",
+        {
+            title: "Apply for Burn Permit",
+            description: "Automates the process of applying for a Maine open burn permit.",
+            inputSchema: {
+                town: z.string().describe("Town where burning will occur"),
+                address: z.string().describe("Physical address of the burn (and applicant's home address)"),
+                city: z.string().describe("City of the applicant's address"),
+                state: z.string().default("ME").describe("State of the applicant's address"),
+                zip: z.string().describe("Zip code"),
+                dob: z.string().describe("Date of Birth (MM/DD/YYYY)"),
+                material: z.enum(["Brush", "Wood Debris", "Agricultural", "Campfire"]).describe("Material to be burned"),
+                applicantName: z.string().describe("Full name of the applicant"),
+                phone: z.string().describe("Phone number (e.g., 207-555-1234)"),
+                email: z.string().email().describe("Email address"),
+                burnLocation: z.string().describe("Description of burn location on property"),
             },
-            required: ["town", "address", "city", "zip", "dob", "material", "applicantName", "phone", "email", "burnLocation"],
+            outputSchema: {
+                success: z.boolean(),
+                permitNumber: z.string(),
+                message: z.string(),
+            },
         },
-    },
-    handler: async (args: any) => {
-        const input = z.object({
-            town: z.string(),
-            address: z.string(),
-            city: z.string(),
-            state: z.string().default("ME"),
-            zip: z.string(),
-            dob: z.string(),
-            material: z.string(),
-            applicantName: z.string(),
-            phone: z.string(),
-            email: z.string().email(),
-            burnLocation: z.string(),
-        }).parse(args);
+        async (input) => {
 
         let browser;
         try {
@@ -188,22 +175,36 @@ export const applyPermitTool = {
                 const match = bodyText.match(/(\d{6,})/);
                 const permitNumber = match ? match[0] : "Unknown";
 
+                const output = {
+                    success: true,
+                    permitNumber: permitNumber,
+                    message: `Permit Application Successful! Permit Number: ${permitNumber}. Please download the permit from the provided link or save the confirmation page.`,
+                };
+
                 return {
                     content: [
                         {
                             type: "text",
-                            text: `Permit Application Successful! Permit Number: ${permitNumber}. Please download the permit from the provided link or save the confirmation page.`,
+                            text: output.message,
                         },
                     ],
+                    structuredContent: output,
                 };
             } else {
+                const output = {
+                    success: false,
+                    permitNumber: "Unknown",
+                    message: "Permit application submitted, but confirmation page title mismatch. Please verify manually.",
+                };
+
                 return {
                     content: [
                         {
                             type: "text",
-                            text: "Permit application submitted, but confirmation page title mismatch. Please verify manually.",
+                            text: output.message,
                         },
                     ],
+                    structuredContent: output,
                 };
             }
         } catch (error: any) {
@@ -221,5 +222,5 @@ export const applyPermitTool = {
                 await browser.close();
             }
         }
-    },
-};
+    });
+}

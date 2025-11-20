@@ -1,47 +1,18 @@
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import {
-    CallToolRequestSchema,
-    ListToolsRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
-import { fireDangerTool } from "./tools/fireDanger.js";
-import { applyPermitTool } from "./tools/applyPermit.js";
+import { registerFireDangerTool } from "./tools/fireDanger.js";
+import { registerApplyPermitTool } from "./tools/applyPermit.js";
 import express from "express";
 
-const server = new Server(
-    {
-        name: "maine-burn-permit-server",
-        version: "1.0.0",
-    },
-    {
-        capabilities: {
-            tools: {},
-        },
-    }
-);
-
-server.setRequestHandler(ListToolsRequestSchema, async () => {
-    return {
-        tools: [
-            fireDangerTool.definition,
-            applyPermitTool.definition,
-        ],
-    };
+const server = new McpServer({
+    name: "maine-burn-permit-server",
+    version: "1.0.0",
 });
 
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const { name, arguments: args } = request.params;
-
-    if (name === fireDangerTool.definition.name) {
-        return fireDangerTool.handler(args);
-    }
-    if (name === applyPermitTool.definition.name) {
-        return applyPermitTool.handler(args);
-    }
-
-    throw new Error(`Tool not found: ${name}`);
-});
+// Register tools using the modern pattern
+registerFireDangerTool(server);
+registerApplyPermitTool(server);
 
 async function main() {
     const useHttp = process.env.USE_HTTP === "true" || process.env.PORT;
