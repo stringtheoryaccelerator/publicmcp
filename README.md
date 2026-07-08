@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/stringtheoryaccelerator-publicmcp-badge.png)](https://mseep.ai/app/stringtheoryaccelerator-publicmcp)
+
 # Maine Burn Permit MCP Server
 
 A Model Context Protocol (MCP) server that provides automated tools for checking fire danger levels and applying for burn permits in Maine.
