@@ -12,6 +12,9 @@ This MCP server exposes these tools:
 4. **Get Coastal Marine Forecast** - Official NWS marine zone text forecasts and active alerts (small craft advisories, gale warnings) for US waters
 5. **Get Tide Predictions** - NOAA CO-OPS high/low tide predictions, with automatic nearest-station lookup
 6. **Plan Marine Route** - Weather routing: great-circle legs between waypoints with the forecast conditions expected at each point at the vessel's ETA, with hazard flagging
+7. **Search Location** - Geocodes place names like "Portland, ME" or "Portland, Maine" to coordinates, returning ranked candidate matches
+
+All marine tools also accept a `location` place name directly (e.g. `"Portland, ME"`) and automatically use the best geocoder match, so you never have to supply coordinates by hand.
 
 All marine tools use free, no-API-key public sources (Open-Meteo, NOAA/NWS, NOAA CO-OPS), so they work identically whether the server runs locally over stdio or as a public hosted deployment.
 
@@ -331,9 +334,11 @@ Hourly marine forecast for any ocean coordinate worldwide.
 **Tool Name:** `get_marine_forecast`
 
 **Input Parameters:**
-- `latitude` (number, required): Latitude of the position at sea
-- `longitude` (number, required): Longitude of the position at sea
+- `latitude` / `longitude` (numbers, optional): Position at sea
+- `location` (string, optional): Place name to look up instead of coordinates, e.g. `"Portland, ME"` - the best geocoder match is used
 - `hours` (number, optional): Forecast length in hours (default 48, max 168)
+
+Provide either coordinates or a `location` name.
 
 Returns hourly wave height/direction/period, swell, wind waves, wind speed/gusts/direction (knots), sea surface temperature, ocean currents, visibility, and precipitation, with automatic hazard warnings (small craft advisory, gale, storm, hurricane-force thresholds).
 
@@ -346,8 +351,10 @@ Official National Weather Service marine zone forecast and active alerts for US 
 **Tool Name:** `get_coastal_marine_forecast`
 
 **Input Parameters:**
-- `latitude` (number, required): Latitude in US coastal/offshore waters
-- `longitude` (number, required): Longitude in US coastal/offshore waters
+- `latitude` / `longitude` (numbers, optional): Position in US coastal/offshore waters
+- `location` (string, optional): US coastal place name, e.g. `"Portland, ME"` - the best geocoder match is used
+
+Provide either coordinates or a `location` name.
 
 Returns the NWS marine zone text forecast (the same product mariners hear on VHF weather radio) plus any active marine alerts such as Small Craft Advisories or Gale Warnings.
 
@@ -362,6 +369,7 @@ High/low tide predictions for US tide stations.
 **Input Parameters:**
 - `stationId` (string, optional): NOAA CO-OPS station ID (e.g. `8418150` for Portland, ME)
 - `latitude` / `longitude` (numbers, optional): Used to find the nearest tide prediction station when no `stationId` is given
+- `location` (string, optional): Place name, e.g. `"Portland, ME"` - the nearest tide station to the best geocoder match is used
 - `days` (number, optional): Days of predictions starting today (default 2, max 7)
 
 **Source:** [NOAA CO-OPS Tides & Currents API](https://api.tidesandcurrents.noaa.gov/api/prod/) - free, no API key.
@@ -373,13 +381,27 @@ Weather routing along a set of waypoints.
 **Tool Name:** `plan_marine_route`
 
 **Input Parameters:**
-- `waypoints` (array, required): Ordered `{latitude, longitude, name?}` waypoints, starting with the departure point (minimum 2)
+- `waypoints` (array, required): Ordered waypoints, starting with the departure point (minimum 2). Each waypoint is either `{latitude, longitude, name?}` or `{location: "Portland, ME", name?}` - place names are geocoded to the best match
 - `departureTime` (string, optional): ISO 8601 departure time (default: now)
 - `speedKnots` (number, optional): Average boat speed in knots (default 5)
 
 Computes great-circle legs (distance and true bearing), estimates the ETA at points along the route, and fetches the forecast conditions expected **at each point at the time the vessel will be there** - not just current conditions. Long legs are automatically subdivided into intermediate sample points. Flags hazards (gale-force winds, rough seas) and warns when parts of the route are beyond the forecast horizon.
 
 **Example:** "Plan a route from Portland, ME (43.66, -70.24) to Monhegan Island (43.76, -69.32) leaving tomorrow at 8am at 6 knots."
+
+### 7. Search Location
+
+Geocode a place name to coordinates.
+
+**Tool Name:** `search_location`
+
+**Input Parameters:**
+- `query` (string, required): Place name, optionally with a state or country after a comma, e.g. `"Portland, ME"`, `"Portland, Maine"`, or `"Cork, Ireland"`. US state abbreviations are expanded automatically
+- `count` (number, optional): Maximum matches to return (default 8)
+
+Returns ranked candidate matches with coordinates, plus a best-guess first match. Useful for disambiguating (e.g. Portland, Maine vs Portland, Oregon) before calling the forecast tools - or skip it entirely and pass `location` directly to those tools.
+
+**Source:** [Open-Meteo Geocoding API](https://open-meteo.com/en/docs/geocoding-api) - free, no API key.
 
 > ⚠️ The marine tools use public model forecasts and are **not for primary navigation**. Always check official marine forecasts and Notices to Mariners before departure.
 
@@ -394,6 +416,7 @@ publicmcp/
 │   │   ├── fireDanger.ts       # Fire danger checking tool
 │   │   └── marine/
 │   │       ├── common.ts       # Shared fetch + great-circle helpers, hazard thresholds
+│   │       ├── locations.ts    # Geocoding: place-name search + best-match resolution
 │   │       ├── marineForecast.ts   # Global marine forecast (Open-Meteo)
 │   │       ├── coastalForecast.ts  # NWS zone forecasts + marine alerts
 │   │       ├── tides.ts        # NOAA CO-OPS tide predictions
@@ -447,6 +470,7 @@ The tools require internet access to:
 - https://mainefireweather.org
 - https://www13.maine.gov/burnpermit
 - https://marine-api.open-meteo.com and https://api.open-meteo.com (marine forecasts, route planning)
+- https://geocoding-api.open-meteo.com (place-name lookup)
 - https://api.weather.gov (NWS coastal forecasts and alerts)
 - https://api.tidesandcurrents.noaa.gov (tide predictions)
 

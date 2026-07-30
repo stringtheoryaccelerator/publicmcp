@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { NOAA_TIDES_URL, NOAA_STATIONS_URL, fetchJson, haversineNm, MARINE_DISCLAIMER } from "./common.js";
+import { resolveLocation } from "./locations.js";
 
 function yyyymmdd(date: Date): string {
     return date.toISOString().slice(0, 10).replace(/-/g, "");
@@ -12,12 +13,18 @@ export function registerTidePredictionsTool(server: McpServer) {
         {
             title: "Get Tide Predictions",
             description:
-                "Gets high/low tide predictions from NOAA CO-OPS for a US tide station. Provide either a NOAA station ID or a coordinate (the nearest tide prediction station is found automatically). No API key required.",
+                "Gets high/low tide predictions from NOAA CO-OPS for a US tide station. Provide a NOAA station ID, a coordinate, or a place name like 'Portland, ME' - the nearest tide prediction station is found automatically. No API key required.",
             inputSchema: {
                 stationId: z
                     .string()
                     .optional()
                     .describe("NOAA CO-OPS station ID (e.g. 8418150 for Portland, ME)"),
+                location: z
+                    .string()
+                    .optional()
+                    .describe(
+                        "Place name to look up instead of a station ID or coordinates, e.g. 'Portland, ME'. The nearest tide station to the best geocoder match is used.",
+                    ),
                 latitude: z
                     .number()
                     .min(-90)
@@ -39,6 +46,10 @@ export function registerTidePredictionsTool(server: McpServer) {
                     .describe("Number of days of predictions starting today (default 2)"),
             },
             outputSchema: {
+                resolvedLocation: z
+                    .string()
+                    .nullable()
+                    .describe("The geocoded place used to find the station, when a location name was given"),
                 stationId: z.string(),
                 stationName: z.string(),
                 distanceNm: z.number().nullable().describe("Distance from the requested coordinate, if one was given"),
@@ -54,20 +65,29 @@ export function registerTidePredictionsTool(server: McpServer) {
             },
         },
         async (args) => {
-            const { stationId, latitude, longitude } = args;
+            const { stationId } = args;
             const days = args.days ?? 2;
 
             try {
+                let { latitude, longitude } = args;
+                let resolvedLocation: string | null = null;
+
                 if (!stationId && (latitude == null || longitude == null)) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: "Provide either a NOAA stationId or both latitude and longitude.",
-                            },
-                        ],
-                        isError: true,
-                    };
+                    if (!args.location) {
+                        return {
+                            content: [
+                                {
+                                    type: "text",
+                                    text: "Provide a NOAA stationId, both latitude and longitude, or a 'location' place name like 'Portland, ME'.",
+                                },
+                            ],
+                            isError: true,
+                        };
+                    }
+                    const match = await resolveLocation(args.location);
+                    latitude = match.latitude;
+                    longitude = match.longitude;
+                    resolvedLocation = match.label;
                 }
 
                 let resolvedId = stationId ?? "";
@@ -116,6 +136,7 @@ export function registerTidePredictionsTool(server: McpServer) {
                 }));
 
                 const output = {
+                    resolvedLocation,
                     stationId: resolvedId,
                     stationName,
                     distanceNm,
@@ -127,7 +148,9 @@ export function registerTidePredictionsTool(server: McpServer) {
                 const header =
                     `Tide predictions for station ${resolvedId}` +
                     (stationName ? ` (${stationName})` : "") +
-                    (distanceNm != null ? `, ${distanceNm} nm from the requested position` : "") +
+                    (distanceNm != null
+                        ? `, ${distanceNm} nm from ${resolvedLocation ?? "the requested position"}`
+                        : "") +
                     ` - heights in feet above MLLW, station local time:\n`;
                 const lines = predictions.map(
                     (p: any) =>

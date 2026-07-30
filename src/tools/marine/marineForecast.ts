@@ -10,6 +10,7 @@ import {
     waveWarning,
     MARINE_DISCLAIMER,
 } from "./common.js";
+import { resolveLocation } from "./locations.js";
 
 const MARINE_HOURLY_VARS = [
     "wave_height",
@@ -38,10 +39,26 @@ export function registerMarineForecastTool(server: McpServer) {
         {
             title: "Get Marine Forecast",
             description:
-                "Gets an hourly marine forecast (waves, swell, wind, sea surface temperature, currents, visibility) for any ocean coordinate worldwide, using the free Open-Meteo marine and weather models. No API key required.",
+                "Gets an hourly marine forecast (waves, swell, wind, sea surface temperature, currents, visibility) for any ocean coordinate worldwide, using the free Open-Meteo marine and weather models. Accepts either latitude/longitude or a place name like 'Portland, ME' (best geocoder match is used - see search_location to review candidates). No API key required.",
             inputSchema: {
-                latitude: z.number().min(-90).max(90).describe("Latitude of the position at sea"),
-                longitude: z.number().min(-180).max(180).describe("Longitude of the position at sea"),
+                latitude: z
+                    .number()
+                    .min(-90)
+                    .max(90)
+                    .optional()
+                    .describe("Latitude of the position at sea (or use 'location' instead)"),
+                longitude: z
+                    .number()
+                    .min(-180)
+                    .max(180)
+                    .optional()
+                    .describe("Longitude of the position at sea (or use 'location' instead)"),
+                location: z
+                    .string()
+                    .optional()
+                    .describe(
+                        "Place name to look up instead of coordinates, e.g. 'Portland, ME' or 'Portland, Maine'. The best geocoder match is used.",
+                    ),
                 hours: z
                     .number()
                     .int()
@@ -53,6 +70,10 @@ export function registerMarineForecastTool(server: McpServer) {
             outputSchema: {
                 latitude: z.number(),
                 longitude: z.number(),
+                resolvedLocation: z
+                    .string()
+                    .nullable()
+                    .describe("The geocoded place the forecast is for, when a location name was given"),
                 hourly: z.array(
                     z.object({
                         time: z.string().describe("UTC timestamp"),
@@ -81,11 +102,30 @@ export function registerMarineForecastTool(server: McpServer) {
             },
         },
         async (args) => {
-            const { latitude, longitude } = args;
             const hours = args.hours ?? 48;
             const forecastDays = Math.min(8, Math.ceil(hours / 24));
 
             try {
+                let { latitude, longitude } = args;
+                let resolvedLocation: string | null = null;
+                if (latitude == null || longitude == null) {
+                    if (!args.location) {
+                        return {
+                            content: [
+                                {
+                                    type: "text",
+                                    text: "Provide either latitude and longitude, or a 'location' place name like 'Portland, ME'.",
+                                },
+                            ],
+                            isError: true,
+                        };
+                    }
+                    const match = await resolveLocation(args.location);
+                    latitude = match.latitude;
+                    longitude = match.longitude;
+                    resolvedLocation = match.label;
+                }
+
                 const marineUrl =
                     `${OPEN_METEO_MARINE_URL}?latitude=${latitude}&longitude=${longitude}` +
                     `&hourly=${MARINE_HOURLY_VARS}&forecast_days=${forecastDays}` +
@@ -175,6 +215,7 @@ export function registerMarineForecastTool(server: McpServer) {
                 const output = {
                     latitude,
                     longitude,
+                    resolvedLocation,
                     hourly,
                     maxWaveHeightM: maxWave,
                     maxWindSpeedKn: maxWind,
@@ -196,8 +237,11 @@ export function registerMarineForecastTool(server: McpServer) {
                 };
                 const lines = hourly.filter((_, i) => i % 3 === 0 && i < 24).map(fmt);
 
+                const placeLabel = resolvedLocation
+                    ? `${resolvedLocation} (${latitude}, ${longitude})`
+                    : `${latitude}, ${longitude}`;
                 const summary =
-                    `Marine forecast for ${latitude}, ${longitude} (next ${hourly.length}h):\n` +
+                    `Marine forecast for ${placeLabel} (next ${hourly.length}h):\n` +
                     lines.join("\n") +
                     `\n\nMax over period: waves ${maxWave != null ? `${(maxWave as number).toFixed(1)}m (${metersToFeet(maxWave).toFixed(0)}ft)` : "n/a"}, ` +
                     `wind ${maxWind != null ? `${Math.round(maxWind)}kn` : "n/a"}` +

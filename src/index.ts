@@ -7,6 +7,7 @@ import { registerMarineForecastTool } from "./tools/marine/marineForecast.js";
 import { registerCoastalForecastTool } from "./tools/marine/coastalForecast.js";
 import { registerTidePredictionsTool } from "./tools/marine/tides.js";
 import { registerRoutePlannerTool } from "./tools/marine/routePlanner.js";
+import { registerSearchLocationTool } from "./tools/marine/locations.js";
 import express from "express";
 
 const server = new McpServer({
@@ -21,6 +22,7 @@ registerMarineForecastTool(server);
 registerCoastalForecastTool(server);
 registerTidePredictionsTool(server);
 registerRoutePlannerTool(server);
+registerSearchLocationTool(server);
 
 async function main() {
     const useHttp = process.env.USE_HTTP === "true" || process.env.PORT;

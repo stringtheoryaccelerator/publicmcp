@@ -15,6 +15,7 @@ import {
     nearestHourIndex,
     MARINE_DISCLAIMER,
 } from "./common.js";
+import { resolveLocation } from "./locations.js";
 
 // Total forecast sample points along the route (waypoints + intermediate
 // points), kept small so the whole plan needs only two API requests.
@@ -24,8 +25,14 @@ const MAX_SAMPLES = 16;
 const MAX_FORECAST_DAYS = 8;
 
 const waypointSchema = z.object({
-    latitude: z.number().min(-90).max(90),
-    longitude: z.number().min(-180).max(180),
+    latitude: z.number().min(-90).max(90).optional(),
+    longitude: z.number().min(-180).max(180).optional(),
+    location: z
+        .string()
+        .optional()
+        .describe(
+            "Place name to geocode instead of coordinates, e.g. 'Portland, ME'. The best geocoder match is used.",
+        ),
     name: z.string().optional().describe("Optional label, e.g. a harbor name"),
 });
 
@@ -35,12 +42,14 @@ export function registerRoutePlannerTool(server: McpServer) {
         {
             title: "Plan Marine Route Weather",
             description:
-                "Plans the weather along a marine route. Given ordered waypoints, a departure time, and a boat speed, it computes great-circle legs, estimates the time of arrival at points along the route, and fetches the forecast (waves, swell, wind) expected at each point at the time the vessel is there. Flags hazardous conditions such as gale-force winds or rough seas. Uses free public forecast models; no API key required.",
+                "Plans the weather along a marine route. Given ordered waypoints, a departure time, and a boat speed, it computes great-circle legs, estimates the time of arrival at points along the route, and fetches the forecast (waves, swell, wind) expected at each point at the time the vessel is there. Flags hazardous conditions such as gale-force winds or rough seas. Waypoints may be given as latitude/longitude or as place names like 'Portland, ME' (best geocoder match is used). Uses free public forecast models; no API key required.",
             inputSchema: {
                 waypoints: z
                     .array(waypointSchema)
                     .min(2)
-                    .describe("Ordered route waypoints, starting with the departure point"),
+                    .describe(
+                        "Ordered route waypoints, starting with the departure point. Each waypoint needs either latitude+longitude or a 'location' place name.",
+                    ),
                 departureTime: z
                     .string()
                     .optional()
@@ -90,7 +99,6 @@ export function registerRoutePlannerTool(server: McpServer) {
             },
         },
         async (args) => {
-            const { waypoints } = args;
             const speedKnots = args.speedKnots ?? 5;
             const departure = args.departureTime ? new Date(args.departureTime) : new Date();
 
@@ -105,6 +113,32 @@ export function registerRoutePlannerTool(server: McpServer) {
                         ],
                         isError: true,
                     };
+                }
+
+                // Resolve any name-only waypoints to coordinates via geocoding.
+                const waypoints: { latitude: number; longitude: number; name?: string }[] = [];
+                for (let i = 0; i < args.waypoints.length; i++) {
+                    const wp = args.waypoints[i];
+                    if (wp.latitude != null && wp.longitude != null) {
+                        waypoints.push({ latitude: wp.latitude, longitude: wp.longitude, name: wp.name });
+                    } else if (wp.location) {
+                        const match = await resolveLocation(wp.location);
+                        waypoints.push({
+                            latitude: match.latitude,
+                            longitude: match.longitude,
+                            name: wp.name ?? match.label,
+                        });
+                    } else {
+                        return {
+                            content: [
+                                {
+                                    type: "text",
+                                    text: `Waypoint ${i + 1} needs either latitude and longitude, or a 'location' place name like 'Portland, ME'.`,
+                                },
+                            ],
+                            isError: true,
+                        };
+                    }
                 }
 
                 const label = (wp: { name?: string; latitude: number; longitude: number }, i: number) =>

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { NWS_API_URL, fetchJson, MARINE_DISCLAIMER } from "./common.js";
+import { resolveLocation } from "./locations.js";
 
 export function registerCoastalForecastTool(server: McpServer) {
     server.registerTool(
@@ -8,12 +9,32 @@ export function registerCoastalForecastTool(server: McpServer) {
         {
             title: "Get Coastal Marine Forecast (NWS)",
             description:
-                "Gets the official National Weather Service marine zone text forecast and any active marine alerts (small craft advisories, gale warnings, etc.) for a coordinate in US coastal or offshore waters. No API key required.",
+                "Gets the official National Weather Service marine zone text forecast and any active marine alerts (small craft advisories, gale warnings, etc.) for a coordinate in US coastal or offshore waters. Accepts either latitude/longitude or a place name like 'Portland, ME' (best geocoder match is used). No API key required.",
             inputSchema: {
-                latitude: z.number().min(-90).max(90).describe("Latitude in US waters"),
-                longitude: z.number().min(-180).max(180).describe("Longitude in US waters"),
+                latitude: z
+                    .number()
+                    .min(-90)
+                    .max(90)
+                    .optional()
+                    .describe("Latitude in US waters (or use 'location' instead)"),
+                longitude: z
+                    .number()
+                    .min(-180)
+                    .max(180)
+                    .optional()
+                    .describe("Longitude in US waters (or use 'location' instead)"),
+                location: z
+                    .string()
+                    .optional()
+                    .describe(
+                        "US coastal place name to look up instead of coordinates, e.g. 'Portland, ME'. The best geocoder match is used.",
+                    ),
             },
             outputSchema: {
+                resolvedLocation: z
+                    .string()
+                    .nullable()
+                    .describe("The geocoded place the forecast is for, when a location name was given"),
                 zoneId: z.string(),
                 zoneName: z.string(),
                 periods: z.array(
@@ -34,19 +55,43 @@ export function registerCoastalForecastTool(server: McpServer) {
             },
         },
         async (args) => {
-            const { latitude, longitude } = args;
-
             try {
+                let { latitude, longitude } = args;
+                let resolvedLocation: string | null = null;
+                if (latitude == null || longitude == null) {
+                    if (!args.location) {
+                        return {
+                            content: [
+                                {
+                                    type: "text",
+                                    text: "Provide either latitude and longitude, or a 'location' place name like 'Portland, ME'.",
+                                },
+                            ],
+                            isError: true,
+                        };
+                    }
+                    const match = await resolveLocation(args.location);
+                    latitude = match.latitude;
+                    longitude = match.longitude;
+                    resolvedLocation = match.label;
+                }
+
                 const zones = await fetchJson(
                     `${NWS_API_URL}/zones?type=marine&point=${latitude},${longitude}`,
                 );
                 const features: any[] = zones.features ?? [];
                 if (features.length === 0) {
+                    const where = resolvedLocation
+                        ? `${resolvedLocation} (${latitude}, ${longitude})`
+                        : `${latitude}, ${longitude}`;
+                    const hint = resolvedLocation
+                        ? " The geocoded point is the town center, which may sit too far inland - try coordinates just offshore of the harbor."
+                        : "";
                     return {
                         content: [
                             {
                                 type: "text",
-                                text: `No NWS marine zone covers ${latitude}, ${longitude}. NWS zone forecasts only cover US coastal, offshore, and high seas waters - for other locations use get_marine_forecast.`,
+                                text: `No NWS marine zone covers ${where}. NWS zone forecasts only cover US coastal, offshore, and high seas waters - for other locations use get_marine_forecast.${hint}`,
                             },
                         ],
                     };
@@ -77,7 +122,14 @@ export function registerCoastalForecastTool(server: McpServer) {
                     expires: a.properties?.expires ?? "",
                 }));
 
-                const output = { zoneId, zoneName, periods, alerts, disclaimer: MARINE_DISCLAIMER };
+                const output = {
+                    resolvedLocation,
+                    zoneId,
+                    zoneName,
+                    periods,
+                    alerts,
+                    disclaimer: MARINE_DISCLAIMER,
+                };
 
                 const alertText = alerts.length
                     ? `ACTIVE ALERTS:\n${alerts
@@ -94,7 +146,9 @@ export function registerCoastalForecastTool(server: McpServer) {
                         {
                             type: "text",
                             text:
-                                `NWS Marine Forecast - ${zoneName} (${zoneId}):\n\n` +
+                                `NWS Marine Forecast - ${zoneName} (${zoneId})` +
+                                (resolvedLocation ? ` near ${resolvedLocation}` : "") +
+                                `:\n\n` +
                                 alertText +
                                 forecastText +
                                 `\n\n${MARINE_DISCLAIMER}`,
