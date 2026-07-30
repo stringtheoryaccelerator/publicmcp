@@ -1,20 +1,29 @@
-# Maine Burn Permit MCP Server
+# Public MCP Server (Maine Burn Permits + Marine Weather)
 
-A Model Context Protocol (MCP) server that provides automated tools for checking fire danger levels and applying for burn permits in Maine.
+A Model Context Protocol (MCP) server that provides automated tools for checking fire danger levels and applying for burn permits in Maine, plus marine weather forecasting and route planning tools built entirely on free public data sources.
 
 ## Overview
 
-This MCP server exposes two main tools:
+This MCP server exposes these tools:
 
 1. **Check Fire Danger** - Retrieves current fire danger ratings for Maine towns from the Maine Fire Weather system
 2. **Apply for Burn Permit** - Automates the process of applying for an open burn permit through Maine's official burn permit system
+3. **Get Marine Forecast** - Hourly waves, swell, wind, sea surface temperature, and currents for any ocean coordinate worldwide (Open-Meteo)
+4. **Get Coastal Marine Forecast** - Official NWS marine zone text forecasts and active alerts (small craft advisories, gale warnings) for US waters
+5. **Get Tide Predictions** - NOAA CO-OPS high/low tide predictions, with automatic nearest-station lookup
+6. **Plan Marine Route** - Weather routing: great-circle legs between waypoints with the forecast conditions expected at each point at the vessel's ETA, with hazard flagging
+
+All marine tools use free, no-API-key public sources (Open-Meteo, NOAA/NWS, NOAA CO-OPS), so they work identically whether the server runs locally over stdio or as a public hosted deployment.
 
 ## Features
 
 - 🔥 Real-time fire danger monitoring for Maine locations
 - 📝 Automated burn permit application submission
+- 🌊 Global marine forecasts (waves, swell, wind, SST, currents) with no API keys
+- ⚓ US coastal zone forecasts, marine alerts, and tide predictions from NOAA
+- 🧭 Route planning with per-leg ETAs and time-matched forecasts along the route
 - 🤖 Model Context Protocol integration for AI assistant compatibility
-- 🌐 Web scraping using Puppeteer for up-to-date information
+- 🌐 Web scraping using Puppeteer for up-to-date information (burn permit tools)
 - ✅ Input validation using Zod schemas
 
 ## Quick Start (Using from GitHub)
@@ -315,6 +324,65 @@ Permit Application Successful! Permit Number: 123456.
 Please download the permit from the provided link or save the confirmation page.
 ```
 
+### 3. Get Marine Forecast
+
+Hourly marine forecast for any ocean coordinate worldwide.
+
+**Tool Name:** `get_marine_forecast`
+
+**Input Parameters:**
+- `latitude` (number, required): Latitude of the position at sea
+- `longitude` (number, required): Longitude of the position at sea
+- `hours` (number, optional): Forecast length in hours (default 48, max 168)
+
+Returns hourly wave height/direction/period, swell, wind waves, wind speed/gusts/direction (knots), sea surface temperature, ocean currents, visibility, and precipitation, with automatic hazard warnings (small craft advisory, gale, storm, hurricane-force thresholds).
+
+**Source:** [Open-Meteo Marine & Weather APIs](https://open-meteo.com/) - free, no API key.
+
+### 4. Get Coastal Marine Forecast
+
+Official National Weather Service marine zone forecast and active alerts for US waters.
+
+**Tool Name:** `get_coastal_marine_forecast`
+
+**Input Parameters:**
+- `latitude` (number, required): Latitude in US coastal/offshore waters
+- `longitude` (number, required): Longitude in US coastal/offshore waters
+
+Returns the NWS marine zone text forecast (the same product mariners hear on VHF weather radio) plus any active marine alerts such as Small Craft Advisories or Gale Warnings.
+
+**Source:** [api.weather.gov](https://www.weather.gov/documentation/services-web-api) - free, no API key.
+
+### 5. Get Tide Predictions
+
+High/low tide predictions for US tide stations.
+
+**Tool Name:** `get_tide_predictions`
+
+**Input Parameters:**
+- `stationId` (string, optional): NOAA CO-OPS station ID (e.g. `8418150` for Portland, ME)
+- `latitude` / `longitude` (numbers, optional): Used to find the nearest tide prediction station when no `stationId` is given
+- `days` (number, optional): Days of predictions starting today (default 2, max 7)
+
+**Source:** [NOAA CO-OPS Tides & Currents API](https://api.tidesandcurrents.noaa.gov/api/prod/) - free, no API key.
+
+### 6. Plan Marine Route
+
+Weather routing along a set of waypoints.
+
+**Tool Name:** `plan_marine_route`
+
+**Input Parameters:**
+- `waypoints` (array, required): Ordered `{latitude, longitude, name?}` waypoints, starting with the departure point (minimum 2)
+- `departureTime` (string, optional): ISO 8601 departure time (default: now)
+- `speedKnots` (number, optional): Average boat speed in knots (default 5)
+
+Computes great-circle legs (distance and true bearing), estimates the ETA at points along the route, and fetches the forecast conditions expected **at each point at the time the vessel will be there** - not just current conditions. Long legs are automatically subdivided into intermediate sample points. Flags hazards (gale-force winds, rough seas) and warns when parts of the route are beyond the forecast horizon.
+
+**Example:** "Plan a route from Portland, ME (43.66, -70.24) to Monhegan Island (43.76, -69.32) leaving tomorrow at 8am at 6 knots."
+
+> ⚠️ The marine tools use public model forecasts and are **not for primary navigation**. Always check official marine forecasts and Notices to Mariners before departure.
+
 ## Project Structure
 
 ```
@@ -323,7 +391,13 @@ publicmcp/
 │   ├── index.ts                 # Main MCP server setup
 │   ├── tools/
 │   │   ├── applyPermit.ts      # Burn permit application tool
-│   │   └── fireDanger.ts       # Fire danger checking tool
+│   │   ├── fireDanger.ts       # Fire danger checking tool
+│   │   └── marine/
+│   │       ├── common.ts       # Shared fetch + great-circle helpers, hazard thresholds
+│   │       ├── marineForecast.ts   # Global marine forecast (Open-Meteo)
+│   │       ├── coastalForecast.ts  # NWS zone forecasts + marine alerts
+│   │       ├── tides.ts        # NOAA CO-OPS tide predictions
+│   │       └── routePlanner.ts # Route planning with time-matched forecasts
 │   ├── test_apply_permit.ts    # Test script for permit application
 │   └── test_fire_danger.ts     # Test script for fire danger check
 ├── dist/                        # Compiled JavaScript output
@@ -372,8 +446,11 @@ sudo apt-get install chromium-browser
 The tools require internet access to:
 - https://mainefireweather.org
 - https://www13.maine.gov/burnpermit
+- https://marine-api.open-meteo.com and https://api.open-meteo.com (marine forecasts, route planning)
+- https://api.weather.gov (NWS coastal forecasts and alerts)
+- https://api.tidesandcurrents.noaa.gov (tide predictions)
 
-Ensure your network allows access to these domains.
+Ensure your network allows access to these domains. The marine tools use plain HTTPS `fetch` (no browser required), so they work even where Puppeteer/Chromium cannot run.
 
 ## Contributing
 

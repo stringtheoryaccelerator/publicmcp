@@ -3,6 +3,10 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { registerFireDangerTool } from "./tools/fireDanger.js";
 import { registerApplyPermitTool } from "./tools/applyPermit.js";
+import { registerMarineForecastTool } from "./tools/marine/marineForecast.js";
+import { registerCoastalForecastTool } from "./tools/marine/coastalForecast.js";
+import { registerTidePredictionsTool } from "./tools/marine/tides.js";
+import { registerRoutePlannerTool } from "./tools/marine/routePlanner.js";
 import express from "express";
 
 const server = new McpServer({
@@ -13,6 +17,10 @@ const server = new McpServer({
 // Register tools using the modern pattern
 registerFireDangerTool(server);
 registerApplyPermitTool(server);
+registerMarineForecastTool(server);
+registerCoastalForecastTool(server);
+registerTidePredictionsTool(server);
+registerRoutePlannerTool(server);
 
 async function main() {
     const useHttp = process.env.USE_HTTP === "true" || process.env.PORT;
