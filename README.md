@@ -320,6 +320,9 @@ Automates the process of applying for a Maine open burn permit.
 - `phone` (string, required): Phone number (e.g., 207-555-1234)
 - `email` (string, required): Email address
 - `burnLocation` (string, required): Description of burn location on property
+- `pileSize` (string, optional): `"small"` (pile under 10'x10', default), `"large"` (under 20'x20'), or `"multiple"` (up to 3 piles, each under 20'x20')
+
+> **Note:** this submits a real application to the State of Maine.
 
 **Example Response:**
 ```
@@ -357,6 +360,8 @@ Official National Weather Service marine zone forecast and active alerts for US 
 Provide either coordinates or a `location` name.
 
 Returns the NWS marine zone text forecast (the same product mariners hear on VHF weather radio) plus any active marine alerts such as Small Craft Advisories or Gale Warnings.
+
+If the point is on land - typically a harbor town's center returned by the geocoder - the nearest marine zone within 25 nm is used, and the response says how far away and in which direction it is (`zoneDistanceNm` is 0 when the point is inside the zone). Places further inland return an error.
 
 **Source:** [api.weather.gov](https://www.weather.gov/documentation/services-web-api) - free, no API key.
 
@@ -413,21 +418,46 @@ publicmcp/
 │   ├── index.ts                 # Main MCP server setup
 │   ├── tools/
 │   │   ├── applyPermit.ts      # Burn permit application tool
+│   │   ├── permitItem.ts       # Picks the permit form's burn item by label
 │   │   ├── fireDanger.ts       # Fire danger checking tool
+│   │   ├── fireStation.ts      # Fire weather station matching
 │   │   └── marine/
 │   │       ├── common.ts       # Shared fetch + great-circle helpers, hazard thresholds
 │   │       ├── locations.ts    # Geocoding: place-name search + best-match resolution
 │   │       ├── marineForecast.ts   # Global marine forecast (Open-Meteo)
 │   │       ├── coastalForecast.ts  # NWS zone forecasts + marine alerts
+│   │       ├── nearestZone.ts  # Nearest NWS marine zone for points on land
 │   │       ├── tides.ts        # NOAA CO-OPS tide predictions
 │   │       └── routePlanner.ts # Route planning with time-matched forecasts
-│   ├── test_apply_permit.ts    # Test script for permit application
-│   └── test_fire_danger.ts     # Test script for fire danger check
+│   ├── test/harness.ts         # In-process MCP client + fake fetch for tool tests
+│   └── live/                   # Opt-in tests against the real APIs and sites
+├── scripts/run-tool.mjs         # Call any tool from the command line
+├── test-data/                   # Example tool inputs (*.local.json is gitignored)
 ├── dist/                        # Compiled JavaScript output
 ├── package.json
 ├── tsconfig.json
 └── README.md
 ```
+
+## Testing
+
+```bash
+npm test           # unit + tool tests, offline (no network, ~1s)
+npm run test:live  # checks against the real APIs and Maine sites (~25s)
+```
+
+- **`npm test`** runs the `*.test.ts` files next to the code. Tool tests call each tool through a real MCP client with a fake `fetch`, so they also check that every result passes the SDK's output-schema validation.
+- **`npm run test:live`** catches upstream changes that fixtures can't, such as the State of Maine renumbering the permit form's options. The permit check only loads the form and inspects its fields: it types no personal data and never submits an application.
+
+To call a single tool by hand:
+
+```bash
+node scripts/run-tool.mjs list
+node scripts/run-tool.mjs get_tide_predictions '{"stationId":"8418150"}'
+node scripts/run-tool.mjs apply_for_burn_permit test-data/burn-permit.local.json   # files a real permit
+```
+
+Copy `test-data/burn-permit.example.json` to `test-data/burn-permit.local.json` and fill in your details; `*.local.json` files are gitignored.
 
 ## Technical Details
 

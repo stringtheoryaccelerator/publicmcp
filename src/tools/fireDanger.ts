@@ -1,6 +1,7 @@
 import { z } from "zod";
 import puppeteer from "puppeteer";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { findStation } from "./fireStation.js";
 
 const FIRE_DANGER_URL = "https://mainefireweather.org/station.php";
 
@@ -58,9 +59,7 @@ export function registerFireDangerTool(server: McpServer) {
 
             // Find station by name (case-insensitive partial match)
             const stations = Object.values(staData.stations) as any[];
-            const station = stations.find((s: any) =>
-                s.station_name.toLowerCase().includes(town.toLowerCase())
-            );
+            const station = findStation(stations, town);
 
             if (!station) {
                 const availableStations = stations.map((s: any) => s.station_name).join(", ");

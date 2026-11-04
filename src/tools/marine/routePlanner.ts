@@ -36,6 +36,76 @@ const waypointSchema = z.object({
     name: z.string().optional().describe("Optional label, e.g. a harbor name"),
 });
 
+export interface RoutePoint {
+    latitude: number;
+    longitude: number;
+    name?: string;
+}
+
+export interface SamplePoint {
+    latitude: number;
+    longitude: number;
+    label: string;
+    distanceFromStartNm: number;
+}
+
+const defaultLabel = (wp: RoutePoint, i: number) =>
+    wp.name ?? `WP${i + 1} (${wp.latitude.toFixed(3)}, ${wp.longitude.toFixed(3)})`;
+
+/**
+ * Points along the route to fetch forecasts for: every waypoint, plus
+ * intermediate points on long legs spaced by distance, never more than
+ * maxSamples in total (each one is a forecast lookup).
+ */
+export function buildSamplePoints(
+    waypoints: RoutePoint[],
+    maxSamples: number = MAX_SAMPLES,
+    label: (wp: RoutePoint, i: number) => string = defaultLabel,
+): SamplePoint[] {
+    const samplePoints: SamplePoint[] = [];
+    let totalDistanceNm = 0;
+    for (let i = 0; i < waypoints.length - 1; i++) {
+        const a = waypoints[i];
+        const b = waypoints[i + 1];
+        totalDistanceNm += haversineNm(a.latitude, a.longitude, b.latitude, b.longitude);
+    }
+    const extraBudget = Math.max(0, maxSamples - waypoints.length);
+    const spacingNm = extraBudget > 0 ? totalDistanceNm / (extraBudget + 1) : Infinity;
+
+    let cumulative = 0;
+    for (let i = 0; i < waypoints.length - 1; i++) {
+        const a = waypoints[i];
+        const b = waypoints[i + 1];
+        const legDist = haversineNm(a.latitude, a.longitude, b.latitude, b.longitude);
+        samplePoints.push({
+            latitude: a.latitude,
+            longitude: a.longitude,
+            label: label(a, i),
+            distanceFromStartNm: cumulative,
+        });
+        const intermediateCount = Math.min(Math.floor(legDist / spacingNm), extraBudget);
+        for (let k = 1; k <= intermediateCount; k++) {
+            const fraction = k / (intermediateCount + 1);
+            const p = intermediatePoint(a.latitude, a.longitude, b.latitude, b.longitude, fraction);
+            samplePoints.push({
+                latitude: Math.round(p.latitude * 1000) / 1000,
+                longitude: Math.round(p.longitude * 1000) / 1000,
+                label: `en route ${label(a, i)} -> ${label(b, i + 1)}`,
+                distanceFromStartNm: cumulative + legDist * fraction,
+            });
+        }
+        cumulative += legDist;
+    }
+    const last = waypoints[waypoints.length - 1];
+    samplePoints.push({
+        latitude: last.latitude,
+        longitude: last.longitude,
+        label: label(last, waypoints.length - 1),
+        distanceFromStartNm: cumulative,
+    });
+    return samplePoints;
+}
+
 export function registerRoutePlannerTool(server: McpServer) {
     server.registerTool(
         "plan_marine_route",
@@ -163,54 +233,7 @@ export function registerRoutePlannerTool(server: McpServer) {
                 const durationHours = totalDistanceNm / speedKnots;
                 const arrival = new Date(departure.getTime() + durationHours * 3600_000);
 
-                // Sample points: all waypoints plus intermediate points on long
-                // legs, distributed by distance so no more than MAX_SAMPLES
-                // forecast lookups are needed.
-                const samplePoints: {
-                    latitude: number;
-                    longitude: number;
-                    label: string;
-                    distanceFromStartNm: number;
-                }[] = [];
-                const extraBudget = Math.max(0, MAX_SAMPLES - waypoints.length);
-                const spacingNm = extraBudget > 0 ? totalDistanceNm / (extraBudget + 1) : Infinity;
-
-                let cumulative = 0;
-                for (let i = 0; i < waypoints.length - 1; i++) {
-                    const a = waypoints[i];
-                    const b = waypoints[i + 1];
-                    const legDist = haversineNm(a.latitude, a.longitude, b.latitude, b.longitude);
-                    samplePoints.push({
-                        latitude: a.latitude,
-                        longitude: a.longitude,
-                        label: label(a, i),
-                        distanceFromStartNm: cumulative,
-                    });
-                    const intermediateCount = Math.min(
-                        Math.floor(legDist / spacingNm),
-                        extraBudget,
-                    );
-                    for (let k = 1; k <= intermediateCount; k++) {
-                        const fraction = k / (intermediateCount + 1);
-                        const p = intermediatePoint(
-                            a.latitude, a.longitude, b.latitude, b.longitude, fraction,
-                        );
-                        samplePoints.push({
-                            latitude: Math.round(p.latitude * 1000) / 1000,
-                            longitude: Math.round(p.longitude * 1000) / 1000,
-                            label: `en route ${label(a, i)} -> ${label(b, i + 1)}`,
-                            distanceFromStartNm: cumulative + legDist * fraction,
-                        });
-                    }
-                    cumulative += legDist;
-                }
-                const last = waypoints[waypoints.length - 1];
-                samplePoints.push({
-                    latitude: last.latitude,
-                    longitude: last.longitude,
-                    label: label(last, waypoints.length - 1),
-                    distanceFromStartNm: cumulative,
-                });
+                const samplePoints = buildSamplePoints(waypoints, MAX_SAMPLES, label);
 
                 // Forecast horizon check.
                 const routeWarnings = new Set<string>();
