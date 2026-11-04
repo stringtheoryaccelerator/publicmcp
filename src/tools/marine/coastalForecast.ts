@@ -94,6 +94,7 @@ export function registerCoastalForecastTool(server: McpServer) {
                                 text: `No NWS marine zone covers ${where}. NWS zone forecasts only cover US coastal, offshore, and high seas waters - for other locations use get_marine_forecast.${hint}`,
                             },
                         ],
+                        isError: true,
                     };
                 }
 
