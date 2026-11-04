@@ -3,7 +3,7 @@ import puppeteer from "puppeteer";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { chooseBurnItem, type SelectOption } from "./permitItem.js";
 
-const PERMIT_URL = "https://www13.maine.gov/burnpermit/public/index.html";
+export const PERMIT_URL = "https://www13.maine.gov/burnpermit/public/index.html";
 
 export function registerApplyPermitTool(server: McpServer) {
     server.registerTool(
