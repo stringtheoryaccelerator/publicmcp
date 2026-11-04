@@ -87,6 +87,29 @@ export function intermediatePoint(
     };
 }
 
+// Point reached by travelling `distanceNm` from a start point on an initial true bearing.
+export function destinationPoint(
+    lat: number,
+    lon: number,
+    bearingDeg: number,
+    distanceNm: number,
+): { latitude: number; longitude: number } {
+    const delta = distanceNm / EARTH_RADIUS_NM;
+    const theta = toRad(bearingDeg);
+    const phi1 = toRad(lat);
+    const lambda1 = toRad(lon);
+    const phi2 = Math.asin(
+        Math.sin(phi1) * Math.cos(delta) + Math.cos(phi1) * Math.sin(delta) * Math.cos(theta),
+    );
+    const lambda2 =
+        lambda1 +
+        Math.atan2(
+            Math.sin(theta) * Math.sin(delta) * Math.cos(phi1),
+            Math.cos(delta) - Math.sin(phi1) * Math.sin(phi2),
+        );
+    return { latitude: toDeg(phi2), longitude: ((toDeg(lambda2) + 540) % 360) - 180 };
+}
+
 const COMPASS_POINTS = [
     "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
     "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW",
