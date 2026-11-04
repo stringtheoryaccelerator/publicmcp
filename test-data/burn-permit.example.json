@@ -1,0 +1,13 @@
+{
+  "applicantName": "Jane Doe",
+  "dob": "01/01/1980",
+  "address": "123 Main Street",
+  "city": "Augusta",
+  "state": "ME",
+  "zip": "04330",
+  "town": "Augusta",
+  "phone": "(207) 555-0100",
+  "email": "jane.doe@example.com",
+  "material": "Brush",
+  "burnLocation": "Back yard, 50 feet from structures"
+}
