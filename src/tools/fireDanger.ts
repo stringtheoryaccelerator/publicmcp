@@ -68,9 +68,10 @@ export function registerFireDangerTool(server: McpServer) {
                     content: [
                         {
                             type: "text",
-                            text: `Could not find a weather station matching "${town}". Available stations: ${availableStations}. Please try one of these locations.`,
+                            text: `Could not find a fire weather station matching "${town}". Stations are named for their location, not every town has one. Try the nearest of: ${availableStations}.`,
                         },
                     ],
+                    isError: true,
                 };
             }
 
