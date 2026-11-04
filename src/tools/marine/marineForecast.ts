@@ -9,6 +9,8 @@ import {
     windWarning,
     waveWarning,
     MARINE_DISCLAIMER,
+    currentHourIndex,
+    forecastDaysNeeded,
 } from "./common.js";
 import { resolveLocation } from "./locations.js";
 
@@ -103,7 +105,7 @@ export function registerMarineForecastTool(server: McpServer) {
         },
         async (args) => {
             const hours = args.hours ?? 48;
-            const forecastDays = Math.min(8, Math.ceil(hours / 24));
+            const forecastDays = forecastDaysNeeded(hours);
 
             try {
                 let { latitude, longitude } = args;
@@ -140,7 +142,9 @@ export function registerMarineForecastTool(server: McpServer) {
                     fetchJson(weatherUrl),
                 ]);
 
-                const times: string[] = marine.hourly?.time ?? [];
+                const allTimes: string[] = marine.hourly?.time ?? [];
+                const start = currentHourIndex(allTimes);
+                const times = start >= 0 ? allTimes.slice(start, start + hours) : [];
                 if (times.length === 0) {
                     return {
                         content: [
@@ -160,7 +164,8 @@ export function registerMarineForecastTool(server: McpServer) {
                 let maxWave: number | null = null;
                 let maxWind: number | null = null;
 
-                const hourly = times.slice(0, hours).map((time: string, i: number) => {
+                const hourly = times.map((time: string, offset: number) => {
+                    const i = start + offset;
                     const waveHeightM = mh.wave_height?.[i] ?? null;
                     const windSpeedKn = wh.wind_speed_10m?.[i] ?? null;
                     const currentKmh = mh.ocean_current_velocity?.[i] ?? null;

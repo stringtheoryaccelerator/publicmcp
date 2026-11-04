@@ -119,6 +119,9 @@ export function waveWarning(waveM: number): string | null {
 export const MARINE_DISCLAIMER =
     "Data from public model forecasts (Open-Meteo/NOAA). Not for primary navigation - always check official marine forecasts and Notices to Mariners before departure.";
 
+export const NWS_MARINE_DISCLAIMER =
+    "Official National Weather Service marine forecast (api.weather.gov). Not for primary navigation - always check current broadcasts and Notices to Mariners before departure.";
+
 // Open-Meteo returns an object for a single location and an array for
 // multi-location requests; normalize to an array.
 export function asLocationArray(data: any): any[] {
@@ -138,4 +141,19 @@ export function nearestHourIndex(times: string[], target: Date): number {
         }
     }
     return best;
+}
+
+// Index of the hourly slot containing `now` (Open-Meteo data starts at midnight
+// UTC, so slicing from 0 would include hours already past). Returns 0 if the
+// data starts in the future and -1 if every slot is in the past.
+export function currentHourIndex(times: string[], now: Date = new Date()): number {
+    const hourStart = Math.floor(now.getTime() / 3_600_000) * 3_600_000;
+    return times.findIndex((t) => new Date(t + "Z").getTime() >= hourStart);
+}
+
+// Days of data to request so that `hours` of forecast are available from the
+// current UTC hour (data starts at midnight UTC). Capped at Open-Meteo's 8 days
+// for the marine model.
+export function forecastDaysNeeded(hours: number, now: Date = new Date()): number {
+    return Math.min(8, Math.ceil((now.getUTCHours() + hours) / 24));
 }

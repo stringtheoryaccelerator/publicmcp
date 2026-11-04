@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { NWS_API_URL, fetchJson, MARINE_DISCLAIMER } from "./common.js";
+import { NWS_API_URL, fetchJson, NWS_MARINE_DISCLAIMER } from "./common.js";
 import { resolveLocation } from "./locations.js";
 
 export function registerCoastalForecastTool(server: McpServer) {
@@ -128,7 +128,7 @@ export function registerCoastalForecastTool(server: McpServer) {
                     zoneName,
                     periods,
                     alerts,
-                    disclaimer: MARINE_DISCLAIMER,
+                    disclaimer: NWS_MARINE_DISCLAIMER,
                 };
 
                 const alertText = alerts.length
@@ -151,7 +151,7 @@ export function registerCoastalForecastTool(server: McpServer) {
                                 `:\n\n` +
                                 alertText +
                                 forecastText +
-                                `\n\n${MARINE_DISCLAIMER}`,
+                                `\n\n${NWS_MARINE_DISCLAIMER}`,
                         },
                     ],
                     structuredContent: output,

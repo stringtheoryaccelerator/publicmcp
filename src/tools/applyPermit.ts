@@ -1,6 +1,7 @@
 import { z } from "zod";
 import puppeteer from "puppeteer";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { chooseBurnItem, type SelectOption } from "./permitItem.js";
 
 const PERMIT_URL = "https://www13.maine.gov/burnpermit/public/index.html";
 
@@ -22,6 +23,10 @@ export function registerApplyPermitTool(server: McpServer) {
                 phone: z.string().describe("Phone number (e.g., 207-555-1234)"),
                 email: z.string().email().describe("Email address"),
                 burnLocation: z.string().describe("Description of burn location on property"),
+                pileSize: z
+                    .enum(["small", "large", "multiple"])
+                    .default("small")
+                    .describe("Pile size: small (< 10'x10'), large (< 20'x20'), or multiple (up to 3 piles, each < 20'x20')"),
             },
             outputSchema: {
                 success: z.boolean(),
@@ -123,14 +128,21 @@ export function registerApplyPermitTool(server: McpServer) {
             // Land Owner: Assume Yes for now
             await page.click("#owner_0");
 
+            // Commercial service question (added to the form in 2026). The site only shows it to non-owners,
+            // so answer "No" only if it is actually displayed.
+            const commercialNo = await page.$("#commercialService_1");
+            if (commercialNo && (await commercialNo.isVisible())) {
+                await commercialNo.click();
+            }
+
             // Burn Location
             await page.type("#burnLocation", input.burnLocation);
 
-            // Type of Item to Burn
-            // Map material to value. Default to 22 (Brush < 10x10)
-            // If Agricultural, we might need to check options.
-            // For now, let's try to select "22" if it exists, otherwise the first option.
-            const itemValue = "22";
+            // Type of Item to Burn: pick by label because the site renumbers option values
+            const itemOptions: SelectOption[] = await page.$$eval("#item option", (opts) =>
+                opts.map((o) => ({ value: (o as HTMLOptionElement).value, text: o.textContent?.trim() ?? "" }))
+            );
+            const itemValue = chooseBurnItem(itemOptions, input.pileSize);
             await page.select("#item", itemValue);
             // Trigger change
             await page.evaluate(() => {
@@ -144,7 +156,7 @@ export function registerApplyPermitTool(server: McpServer) {
 
             // Affirmation
             // Wait for affirmation checkbox to be visible (it might be hidden if 'Other' is selected, but we selected 22)
-            await page.waitForSelector("#affirmation", { visible: true });
+            await page.waitForSelector("#affirmation", { visible: true, timeout: 10000 });
             await page.click("#affirmation");
 
             // Click Continue
@@ -153,12 +165,21 @@ export function registerApplyPermitTool(server: McpServer) {
                 page.click("input[name='continue']"),
             ]);
 
+            // If the form rejected a field we stay on the applicant page; report the site's validation messages
+            if (!(await page.$("#minimumRequirements_agreed"))) {
+                const errors = await page.$$eval(".error, .errors, .help-block, .alert", (els) =>
+                    els.map((e) => e.textContent?.trim()).filter((t) => t && t !== "Required.")
+                );
+                throw new Error(
+                    `The permit form did not accept the applicant information${errors.length ? `: ${errors.join("; ")}` : ""}. No permit was issued.`
+                );
+            }
+
             // Step 4: Minimum Requirements
             await page.waitForSelector("#minimumRequirements_agreed", { visible: true });
             await page.click("#minimumRequirements_agreed");
 
-            // Click Continue
-            // Click Continue
+            // Click Continue (this issues the permit)
             await Promise.all([
                 page.waitForNavigation({ waitUntil: "networkidle0", timeout: 60000 }),
                 page.click("input[name='continue']"),

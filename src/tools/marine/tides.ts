@@ -116,6 +116,14 @@ export function registerTidePredictionsTool(server: McpServer) {
                     resolvedId = best.id;
                     stationName = best.name ?? "";
                     distanceNm = Math.round(bestDist * 10) / 10;
+                } else {
+                    // Best effort: the name is a nicety, so don't fail the request without it
+                    try {
+                        const meta = await fetchJson(`${NOAA_STATIONS_URL.replace(/\.json$/, "")}/${encodeURIComponent(resolvedId)}.json`);
+                        stationName = meta.stations?.[0]?.name ?? "";
+                    } catch {
+                        stationName = "";
+                    }
                 }
 
                 const url =
